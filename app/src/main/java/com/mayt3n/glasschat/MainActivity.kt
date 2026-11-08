@@ -79,7 +79,7 @@ class MainActivity : Activity() {
         val scroll = ScrollView(this).apply {
             isFillViewport = true
             clipToPadding = false
-            addView(page, ScrollView.LayoutParams(-1, -1))
+            addView(page, FrameLayout.LayoutParams(-1, -1))
         }
         root.addView(scroll, FrameLayout.LayoutParams(-1, -1))
 
@@ -290,7 +290,7 @@ class MainActivity : Activity() {
             isFillViewport = true
             clipToPadding = false
             overScrollMode = View.OVER_SCROLL_NEVER
-            addView(chatColumn, ScrollView.LayoutParams(-1, -2))
+            addView(chatColumn, FrameLayout.LayoutParams(-1, -2))
         }
         page.addView(chatScroll, LinearLayout.LayoutParams(-1, 0, 1f))
 
