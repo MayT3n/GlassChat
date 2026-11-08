@@ -3,6 +3,10 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+dependencies {
+    implementation("androidx.browser:browser:1.8.0")
+}
+
 android {
     namespace = "com.mayt3n.glasschat"
     compileSdk = 35
