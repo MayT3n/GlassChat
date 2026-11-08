@@ -126,8 +126,7 @@ class MainActivity : Activity() {
         }
         dock.addView(dockButton("⌂", "خانه") { web.loadUrl(HOME) }, LinearLayout.LayoutParams(0, dp(52), 1f))
         dock.addView(dockButton("＋", "گفت‌وگوی تازه") {
-            web.evaluateJavascript("document.querySelector('a[href*="/"]')?.click();", null)
-            web.loadUrl(HOME)
+            web.evaluateJavascript("""document.querySelector('[data-testid="create-new-chat-button"]')?.click();""", null)
         }, LinearLayout.LayoutParams(0, dp(52), 1f))
         dock.addView(dockButton("↻", "بارگذاری") { web.reload() }, LinearLayout.LayoutParams(0, dp(52), 1f))
         val dockParams = FrameLayout.LayoutParams(-1, dp(70), Gravity.BOTTOM).apply {
@@ -163,7 +162,7 @@ class MainActivity : Activity() {
     }
 
     private fun dockButton(symbol: String, label: String, action: () -> Unit) = LinearLayout(this).apply {
-        orientation = VERTICAL
+        orientation = LinearLayout.VERTICAL
         gravity = Gravity.CENTER
         isClickable = true
         isFocusable = true
