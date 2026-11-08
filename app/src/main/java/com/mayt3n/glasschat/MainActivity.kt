@@ -59,6 +59,7 @@ class MainActivity : Activity() {
     private var modelName = "مدل"
     private var signingIn = false
     private var sending = false
+    private var guestMode = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -78,7 +79,9 @@ class MainActivity : Activity() {
             }.toMutableList())
         })
         account = auth.savedSession()
+        guestMode = getSharedPreferences("glasschat_device", Context.MODE_PRIVATE).getBoolean("guest_mode", false)
         when {
+            account == null && guestMode -> showChatList()
             account == null -> showLogin()
             account?.canUsePlan() != true -> showPlanGate(account!!)
             else -> showChatList()
@@ -190,6 +193,12 @@ class MainActivity : Activity() {
         card.addView(primary(if (busy) "در حال اتصال..." else "Continue with ChatGPT", if (busy) "◌" else "✦") {
             if (!busy) beginSignIn()
         }, LinearLayout.LayoutParams(-1, dp(56)))
+        card.addView(secondary("ورود به‌عنوان مهمان", "◈") {
+            guestMode = true
+            getSharedPreferences("glasschat_device", Context.MODE_PRIVATE).edit().putBoolean("guest_mode", true).apply()
+            activeChatId = null
+            showChatList()
+        }, LinearLayout.LayoutParams(-1, dp(50)).apply { topMargin = dp(10) })
         val safe = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -221,6 +230,8 @@ class MainActivity : Activity() {
             try {
                 val connected = auth.signIn()
                 account = connected
+                guestMode = false
+                getSharedPreferences("glasschat_device", Context.MODE_PRIVATE).edit().putBoolean("guest_mode", false).apply()
                 runOnUiThread {
                     signingIn = false
                     if (connected.canUsePlan()) {
@@ -261,7 +272,7 @@ class MainActivity : Activity() {
     }
 
     private fun showChatList() {
-        if (account == null) { showLogin(); return }
+        if (account == null && !guestMode) { showLogin(); return }
         val frame = makeRoot()
         val page = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -317,7 +328,7 @@ class MainActivity : Activity() {
         }
         populate("")
         search.addTextChangedListener(SimpleWatcher { populate(it) })
-        page.addView(label(account?.email ?: "حساب ChatGPT متصل است", 9.5f, Color.rgb(116, 138, 176)).apply { gravity = Gravity.CENTER },
+        page.addView(label(if (guestMode && account == null) "حالت مهمان • فقط پیش‌نمایش رابط کاربری" else account?.email ?: "حساب ChatGPT متصل است", 9.5f, Color.rgb(116, 138, 176)).apply { gravity = Gravity.CENTER },
             LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
         addDock(frame, "chats")
         setContentView(frame); animateIn(frame); islandState("CHATGPT CONNECTED")
@@ -364,7 +375,7 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER; setPadding(dp(10), dp(8), dp(10), dp(8))
             background = rounded(Color.argb(36, 117, 148, 255), 24, Color.argb(62, 178, 200, 255))
             maxWidth = dp(112); maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
-            setOnClickListener { showModels() }
+            setOnClickListener { if (guestMode && account == null) Toast.makeText(this@MainActivity, "انتخاب مدل پس از ورود فعال می‌شود.", Toast.LENGTH_SHORT).show() else showModels() }
         }
         header.addView(modelButton)
         page.addView(header, LinearLayout.LayoutParams(-1, dp(56)).apply { bottomMargin = dp(5) })
@@ -399,11 +410,11 @@ class MainActivity : Activity() {
         }
         input.addView(sendButton, LinearLayout.LayoutParams(dp(46), dp(44)).apply { marginStart = dp(7) })
         page.addView(input, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(7) })
-        page.addView(label("پاسخ با مجوز استفاده از پلن ChatGPT", 9f, Color.rgb(123, 141, 174)).apply { gravity = Gravity.CENTER },
+        page.addView(label(if (guestMode && account == null) "پیش‌نمایش مهمان • برای پاسخ واقعی وارد حساب شو" else "پاسخ با مجوز استفاده از پلن ChatGPT", 9f, Color.rgb(123, 141, 174)).apply { gravity = Gravity.CENTER },
             LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(5) })
 
         setContentView(frame); drawMessages()
-        if (models.isEmpty()) fetchModels()
+        if (models.isEmpty() && account != null) fetchModels()
         animateIn(frame); islandState(if (sending) "THINKING" else "READY")
     }
 
@@ -464,6 +475,10 @@ class MainActivity : Activity() {
         if (sending || !::composer.isInitialized) return
         val prompt = composer.text.toString().trim()
         if (prompt.isBlank()) return
+        if (guestMode && account == null) {
+            Toast.makeText(this, "حالت مهمان فقط برای مشاهده محیط چت است؛ برای دریافت پاسخ واقعی وارد حساب شو.", Toast.LENGTH_LONG).show()
+            return
+        }
         if (selectedModel.isBlank()) {
             Toast.makeText(this, "مدل هنوز آماده نیست.", Toast.LENGTH_SHORT).show()
             fetchModels(); return
@@ -563,7 +578,33 @@ class MainActivity : Activity() {
     }
 
     private fun showSettings() {
-        val user = account ?: run { showLogin(); return }
+        val user = account
+        if (user == null && guestMode) {
+            val frame = makeRoot()
+            val page = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(19), dp(54), dp(19), dp(10)) }
+            frame.addView(page, FrameLayout.LayoutParams(-1, -1).apply { bottomMargin = dp(83) })
+            page.addView(label("تنظیمات", 28f, Color.WHITE, true))
+            page.addView(label("تجربه GlassChat", 10.5f, Color.rgb(153, 171, 206)), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4); bottomMargin = dp(18) })
+            val profile = glass(23).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(17), dp(16), dp(17)) }
+            profile.addView(label("◈  حالت مهمان", 15f, Color.WHITE, true))
+            profile.addView(label("می‌توانی ظاهر برنامه و محیط گفت‌وگو را ببینی. برای دریافت پاسخ از هوش مصنوعی باید وارد حساب شوی.", 11f, Color.rgb(157, 179, 215)).apply { setLineSpacing(dp(4).toFloat(), 1f) }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+            page.addView(profile, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(14) })
+            page.addView(primary("ورود به حساب ChatGPT", "✦") {
+                guestMode = false
+                getSharedPreferences("glasschat_device", Context.MODE_PRIVATE).edit().putBoolean("guest_mode", false).apply()
+                showLogin()
+            }, LinearLayout.LayoutParams(-1, dp(52)))
+            page.addView(secondary("خروج از حالت مهمان", "↪") {
+                guestMode = false
+                getSharedPreferences("glasschat_device", Context.MODE_PRIVATE).edit().putBoolean("guest_mode", false).apply()
+                activeChatId = null
+                showLogin()
+            }, LinearLayout.LayoutParams(-1, dp(49)).apply { topMargin = dp(10) })
+            addDock(frame, "settings")
+            setContentView(frame); animateIn(frame); islandState("GUEST MODE")
+            return
+        }
+        val signedInUser = user ?: run { showLogin(); return }
         val frame = makeRoot()
         val page = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(19), dp(54), dp(19), dp(10)) }
         frame.addView(page, FrameLayout.LayoutParams(-1, -1).apply { bottomMargin = dp(83) })
@@ -577,8 +618,8 @@ class MainActivity : Activity() {
         }
         profile.addView(orb(dp(47)), LinearLayout.LayoutParams(dp(47), dp(47)).apply { marginEnd = dp(11) })
         val details = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        details.addView(label(user.name.ifBlank { "حساب ChatGPT" }, 13f, Color.WHITE, true))
-        details.addView(label(user.email, 10f, Color.rgb(157, 179, 215)), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) })
+        details.addView(label(signedInUser.name.ifBlank { "حساب ChatGPT" }, 13f, Color.WHITE, true))
+        details.addView(label(signedInUser.email, 10f, Color.rgb(157, 179, 215)), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) })
         profile.addView(details, LinearLayout.LayoutParams(0, -2, 1f))
         profile.addView(label("●", 10f, Color.rgb(103, 220, 172)))
         page.addView(profile, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(14) })
