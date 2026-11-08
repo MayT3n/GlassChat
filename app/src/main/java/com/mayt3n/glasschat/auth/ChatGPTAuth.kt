@@ -52,6 +52,13 @@ class ChatGPTAuth(private val activity: Activity) {
     fun savedSession(): ChatGPTSession? = store.read()
 
     fun signIn(): ChatGPTSession {
+        checkAuthDns()
+        val previousSession = store.read()
+        val registeredClientId = devicePrefs.getString("issued_client_id", null) ?: previousSession?.clientId
+        val expectedSubject = previousSession?.subject ?: devicePrefs.getString("registered_subject", null)
+        val previousEmail = previousSession?.email ?: devicePrefs.getString("registered_email", null).orEmpty()
+        val isFirstRegistration = registeredClientId.isNullOrBlank()
+        val requestedClientId = if (isFirstRegistration) "dynamic_agent_client" else registeredClientId!!
         val hostId = devicePrefs.getString("host_id", null) ?: "urn:uuid:${UUID.randomUUID()}".also {
             devicePrefs.edit().putString("host_id", it).apply()
         }
@@ -69,8 +76,7 @@ class ChatGPTAuth(private val activity: Activity) {
 
         try {
             val params = linkedMapOf(
-                "client_id" to "dynamic_agent_client",
-                "agent_name_hint" to "GlassChat",
+                "client_id" to requestedClientId,
                 "ext_agent_host_id" to hostId,
                 "response_type" to "code",
                 "redirect_uri" to redirectUri,
@@ -81,6 +87,12 @@ class ChatGPTAuth(private val activity: Activity) {
                 "code_challenge_method" to "S256",
                 "code_challenge" to challenge
             )
+            if (isFirstRegistration) {
+                params["agent_name_hint"] = "GlassChat"
+            } else {
+                if (previousEmail.isNotBlank()) params["login_hint"] = previousEmail
+                if (!previousSession?.idToken.isNullOrBlank()) params["id_token_hint"] = previousSession!!.idToken
+            }
             val authUrl = "https://auth.openai.com/api/accounts/authorize?" +
                 params.entries.joinToString("&") { "${urlEncode(it.key)}=${urlEncode(it.value)}" }
 
@@ -95,10 +107,16 @@ class ChatGPTAuth(private val activity: Activity) {
                 throw IllegalStateException(callback.optString("error_description", error))
             }
             val code = callback.optString("code")
-            val clientId = callback.optString("client_id")
-            if (code.isBlank() || clientId.isBlank()) {
-                throw IllegalStateException("پاسخ ورود ناقص بود. فرایند را دوباره شروع کن.")
+            val callbackClientId = callback.optString("client_id")
+            val clientId = when {
+                isFirstRegistration && callbackClientId.isBlank() ->
+                    throw IllegalStateException("ثبت اولیه کامل نشد؛ شناسه کلاینت از OpenAI برنگشت.")
+                !isFirstRegistration && callbackClientId.isNotBlank() && callbackClientId != requestedClientId ->
+                    throw SecurityException("شناسه کلاینت برگشتی با حساب ثبت‌شده یکسان نیست.")
+                isFirstRegistration -> callbackClientId
+                else -> requestedClientId
             }
+            if (code.isBlank()) throw IllegalStateException("کد ورود از مرورگر دریافت نشد.")
 
             val token = postForm(
                 "https://auth.openai.com/api/accounts/oauth/token",
@@ -115,6 +133,9 @@ class ChatGPTAuth(private val activity: Activity) {
             val idToken = token.optString("id_token")
             if (idToken.isBlank()) throw SecurityException("توکن هویت از OpenAI دریافت نشد.")
             val identity = verifyIdentity(idToken, clientId, nonce)
+            if (!expectedSubject.isNullOrBlank() && expectedSubject != identity.subject) {
+                throw SecurityException("حساب برگشتی با حساب قبلی این اتصال مطابقت ندارد.")
+            }
             val scopes = token.optString("scope").split(Regex("\\s+")).filter { it.isNotBlank() }.toSet()
             val access = token.optString("access_token")
             val refresh = token.optString("refresh_token")
@@ -135,9 +156,26 @@ class ChatGPTAuth(private val activity: Activity) {
                 scopes = scopes
             )
             store.write(session)
+            devicePrefs.edit()
+                .putString("issued_client_id", clientId)
+                .putString("registered_subject", identity.subject)
+                .putString("registered_email", identity.email)
+                .apply()
             return session
         } finally {
             try { server.close() } catch (_: Exception) { }
+        }
+    }
+
+    private fun checkAuthDns() {
+        try {
+            val addresses = InetAddress.getAllByName("auth.openai.com")
+            if (addresses.isEmpty()) throw UnknownHostException("No DNS records returned")
+        } catch (e: UnknownHostException) {
+            throw IllegalStateException(
+                "DNS گوشی نتوانست auth.openai.com را پیدا کند. این مشکل از رمز یا حساب نیست. در Chrome همین آدرس را باز کن؛ سپس شبکه را عوض کن یا تنظیم Private DNS گوشی را بررسی کن و دوباره تلاش کن.",
+                e
+            )
         }
     }
 
@@ -312,6 +350,8 @@ class ChatGPTAuth(private val activity: Activity) {
         return try {
             val response = connection.inputStream.bufferedReader(StandardCharsets.UTF_8).use { it.readText() }
             JSONObject(response)
+        } catch (e: UnknownHostException) {
+            throw IllegalStateException("DNS نتوانست دامنه OpenAI را پیدا کند. اتصال اینترنت و Private DNS را بررسی کن.", e)
         } finally {
             connection.disconnect()
         }
@@ -335,7 +375,9 @@ class ChatGPTAuth(private val activity: Activity) {
                 val detail = try { JSONObject(response).optString("error_description").ifBlank { JSONObject(response).optString("error") } } catch (_: Exception) { response }
                 throw IllegalStateException("OpenAI پاسخ ${code} داد: ${detail.take(220)}")
             }
-            JSONObject(response)
+            if (response.isBlank()) JSONObject() else JSONObject(response)
+        } catch (e: UnknownHostException) {
+            throw IllegalStateException("DNS نتوانست دامنه OpenAI را پیدا کند. اتصال اینترنت و Private DNS را بررسی کن.", e)
         } finally {
             connection.disconnect()
         }
