@@ -119,6 +119,13 @@ class ChatGPTAuth(private val activity: Activity) {
             }
             if (code.isBlank()) throw IllegalStateException("کد ورود از مرورگر دریافت نشد.")
 
+            // OpenAI issues a stable client ID during first registration.
+            // Persist it before code exchange so a network failure cannot lose the registration.
+            devicePrefs.edit()
+                .putString("issued_client_id", clientId)
+                .putString("host_id", hostId)
+                .apply()
+
             val token = postForm(
                 "https://auth.openai.com/api/accounts/oauth/token",
                 mapOf(
