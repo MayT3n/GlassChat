@@ -512,10 +512,9 @@ class MainActivity : Activity() {
 
     private fun showModels() {
         if (models.isEmpty()) { fetchModels(); return }
-        val overlay = FrameLayout(this).apply {
-            setBackgroundColor(Color.argb(140, 0, 0, 0))
-            setOnClickListener { root.removeView(this) }
-        }
+        val overlay = FrameLayout(this)
+        overlay.setBackgroundColor(Color.argb(140, 0, 0, 0))
+        overlay.setOnClickListener { root.removeView(overlay) }
         val sheet = glass(27).apply {
             orientation = LinearLayout.VERTICAL; setPadding(dp(17), dp(18), dp(17), dp(16))
             isClickable = true; setOnClickListener { }
