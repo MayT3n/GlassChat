@@ -4,8 +4,6 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
 import android.graphics.Color
-import android.graphics.RenderEffect
-import android.graphics.Shader
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
@@ -153,10 +151,6 @@ class MainActivity : Activity() {
 
     private fun glassPanel(radius: Float) = LinearLayout(this).apply {
         background = rounded(Color.argb(185, 35, 42, 58), radius)
-        if (Build.VERSION.SDK_INT >= 31) {
-            // Keep blur subtle; the translucent tint remains the fallback on older devices.
-            setRenderEffect(RenderEffect.createBlurEffect(8f, 8f, Shader.TileMode.CLAMP))
-        }
         elevation = dp(8).toFloat()
     }
 
