@@ -12,6 +12,7 @@ import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
+import android.os.BatteryManager
 import android.os.Bundle
 import android.view.Gravity
 import android.view.View
@@ -22,6 +23,7 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.TextClock
 import android.widget.Toast
 import com.mayt3n.glasschat.auth.ChatGPTAuth
 import com.mayt3n.glasschat.auth.ChatGPTSession
@@ -60,7 +62,8 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.statusBarColor = Color.rgb(8, 11, 20)
+        window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
+        window.statusBarColor = Color.TRANSPARENT
         window.navigationBarColor = Color.rgb(8, 11, 20)
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         if (Build.VERSION.SDK_INT >= 29) {
@@ -89,6 +92,27 @@ class MainActivity : Activity() {
             clipToPadding = false
         }
         frame.addView(AuroraView(this), FrameLayout.LayoutParams(-1, -1))
+
+        val clock = TextClock(this).apply {
+            format12Hour = "h:mm"
+            format24Hour = "HH:mm"
+            textSize = 13f
+            setTextColor(Color.WHITE)
+            typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        frame.addView(clock, FrameLayout.LayoutParams(dp(54), dp(24), Gravity.TOP or Gravity.START).apply {
+            topMargin = dp(9); leftMargin = dp(23)
+        })
+        val batteryManager = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+        val batteryLevel = batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+        val rightStatus = label("▂ ▄ ▆   " + (if (batteryLevel in 1..100) batteryLevel.toString() + "%" else "--%"), 10.5f, Color.WHITE, true).apply {
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        frame.addView(rightStatus, FrameLayout.LayoutParams(dp(94), dp(24), Gravity.TOP or Gravity.END).apply {
+            topMargin = dp(9); rightMargin = dp(20)
+        })
+
         val island = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
