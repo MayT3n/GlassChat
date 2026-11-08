@@ -158,7 +158,7 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
             setPadding(dp(25), dp(43), dp(25), dp(28))
         }
-        scroll.addView(body, ScrollView.LayoutParams(-1, -2))
+        scroll.addView(body, FrameLayout.LayoutParams(-1, -2))
         frame.addView(scroll, FrameLayout.LayoutParams(-1, -1).apply { topMargin = dp(42) })
         body.addView(orb(dp(78)), LinearLayout.LayoutParams(dp(78), dp(78)).apply {
             gravity = Gravity.CENTER_HORIZONTAL; bottomMargin = dp(17)
@@ -282,7 +282,7 @@ class MainActivity : Activity() {
         searchBox.addView(label("⌕", 23f, Color.rgb(149, 172, 214)), LinearLayout.LayoutParams(dp(28), -2))
         val search = EditText(this).apply {
             hint = "جست‌وجوی گفت‌وگوها"; setHintTextColor(Color.rgb(132, 150, 183))
-            setTextColor(Color.WHITE); textSize = 13f; background = null; singleLine = true
+            setTextColor(Color.WHITE); textSize = 13f; background = null; maxLines = 1; minLines = 1
             imeOptions = EditorInfo.IME_ACTION_SEARCH; setPadding(dp(4), dp(12), dp(4), dp(12))
         }
         searchBox.addView(search, LinearLayout.LayoutParams(0, -2, 1f))
